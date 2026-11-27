@@ -1,0 +1,92 @@
+{
+  "backend": {
+    "name": "后端开发工程师（应届/实习）",
+    "aliases": ["后端", "服务端", "后台开发", "Java 后端", "Python 后端"],
+    "core": [
+      {"item": "一门主流编程语言", "expect": "有可运行的项目代码"},
+      {"item": "数据库与 SQL", "expect": "能建表、写查询、处理关联"},
+      {"item": "HTTP 与 REST 接口", "expect": "自己写过接口，理解请求/响应"},
+      {"item": "Git 版本管理", "expect": "有持续提交记录"},
+      {"item": "Linux 基础", "expect": "能部署、看日志"}
+    ],
+    "bonus": [
+      {"item": "单元测试"},
+      {"item": "Redis/缓存"},
+      {"item": "Docker"},
+      {"item": "部署上线经历"}
+    ],
+    "search_keywords": ["后端开发 实习", "Python 后端 应届"]
+  },
+  "frontend": {
+    "name": "前端开发工程师（应届/实习）",
+    "aliases": ["前端", "Web 前端", "React", "Vue"],
+    "core": [
+      {"item": "HTML/CSS/JavaScript 基础", "expect": "能独立还原设计稿"},
+      {"item": "一个主流框架", "expect": "React 或 Vue 做过完整页面"},
+      {"item": "浏览器调试与兼容", "expect": "会用 DevTools 定位问题"},
+      {"item": "接口联调", "expect": "能对接 REST 接口、处理异步"},
+      {"item": "Git 版本管理", "expect": "有持续提交记录"}
+    ],
+    "bonus": [
+      {"item": "工程化构建（Vite/Webpack）"},
+      {"item": "TypeScript"},
+      {"item": "性能优化"},
+      {"item": "组件库封装"}
+    ],
+    "search_keywords": ["前端开发 实习", "Web 前端 应届"]
+  },
+  "embedded": {
+    "name": "嵌入式开发工程师（应届/实习）",
+    "aliases": ["嵌入式", "单片机", "硬件开发", "驱动开发"],
+    "core": [
+      {"item": "C 语言与指针", "expect": "能读写寄存器、操作内存"},
+      {"item": "单片机/STM32 项目", "expect": "独立完成外设驱动"},
+      {"item": "常用通信协议", "expect": "UART/I2C/SPI 至少一种"},
+      {"item": "电路基础与调试", "expect": "能看原理图、用示波器"},
+      {"item": "RTOS 或裸机调度", "expect": "理解中断与任务调度"}
+    ],
+    "bonus": [
+      {"item": "FreeRTOS"},
+      {"item": "Linux 驱动"},
+      {"item": "低功耗设计"},
+      {"item": "量产项目经历"}
+    ],
+    "search_keywords": ["嵌入式开发 实习", "单片机 应届"]
+  },
+  "qa": {
+    "name": "测试工程师（应届/实习）",
+    "aliases": ["测试", "QA", "软件测试", "自动化测试"],
+    "core": [
+      {"item": "测试用例设计", "expect": "能覆盖正常与异常路径"},
+      {"item": "缺陷管理流程", "expect": "会提 Bug、跟踪闭环"},
+      {"item": "接口测试", "expect": "会用 Postman 或脚本验证接口"},
+      {"item": "基础编程能力", "expect": "Python 或 Java 能写测试脚本"},
+      {"item": "SQL 查询", "expect": "能查库校验数据"}
+    ],
+    "bonus": [
+      {"item": "Selenium/Playwright"},
+      {"item": "性能测试"},
+      {"item": "CI 自动化"},
+      {"item": "测试平台开发"}
+    ],
+    "search_keywords": ["软件测试 实习", "自动化测试 应届"]
+  },
+  "ai_app": {
+    "name": "大模型应用开发（应届/实习）",
+    "aliases": ["AI 应用", "大模型", "LLM 开发", "Agent 开发"],
+    "core": [
+      {"item": "Python 编程", "expect": "能写脚本调 API、处理数据"},
+      {"item": "调用大模型 API", "expect": "理解 prompt、token、流式输出"},
+      {"item": "后端接口能力", "expect": "能把模型能力包成 HTTP 服务"},
+      {"item": "基础数据处理", "expect": "能清洗、切分、组织文本"},
+      {"item": "工程化意识", "expect": "会日志、错误处理、成本控制"}
+    ],
+    "bonus": [
+      {"item": "RAG 检索增强"},
+      {"item": "向量数据库"},
+      {"item": "Agent 工具调用"},
+      {"item": "模型微调"}
+    ],
+    "search_keywords": ["大模型应用 实习", "AI 开发 应届"]
+  }
+}

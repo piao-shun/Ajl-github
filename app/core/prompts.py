@@ -60,3 +60,43 @@ def build_analysis_prompt(raw_text, target_job="", background="", jd=""):
 {raw_text}
 \"\"\"
 """
+
+DIRECTION_SYSTEM_PROMPT = (
+    "你是一名资深招聘官，负责按行业通用标准给学生做职业方向诊断。"
+    "你只能使用简历原文中出现过的事实，不得编造公司、数字、技术栈或经历。"
+    "level 只能是 have / partial / missing / unknown 四个值之一，不许自创。"
+    "unknown 专门用于“简历里没提，但用户可能有”的情况，不要武断判成 missing。"
+    "table 必须覆盖给定标准的全部条目，顺序与给定顺序一致。"
+    "priorities 里的 item 必须能在 table 里找到同名条目，禁止出现表外项。"
+    "evidence 必须是简历原文逐字片段，禁止改写；找不到就留空字符串。"
+    "所有内容用简体中文。只输出 JSON。"
+)
+
+
+def build_direction_prompt(raw_text, profile):
+    direction = profile.get("direction", "")
+    name = profile.get("name", "")
+    core_lines = "\n".join(
+        f"{index + 1}. {entry.get('item', '')}（期望：{entry.get('expect', '')}）"
+        for index, entry in enumerate(profile.get("core", []))
+    )
+    return f"""请判断这份简历在「{name}」方向上处于什么水平，输出一个 JSON 对象，字段如下：
+{{
+  "direction": "{direction}",
+  "summary": "一段话总评，不超过 120 字",
+  "table": [
+    {{"item": "条目名", "level": "have|partial|missing|unknown", "evidence": "简历原文逐字片段，没有就空字符串", "note": "一句话说明判断依据"}}
+  ],
+  "priorities": [
+    {{"item": "条目名", "reason": "为什么最该补", "how": "具体怎么补，一条可执行路径"}}
+  ]
+}}
+
+行业标准（core，请按顺序逐条判断，table 必须覆盖全部）：
+{core_lines}
+
+简历原文：
+\"\"\"
+{raw_text}
+\"\"\"
+"""
