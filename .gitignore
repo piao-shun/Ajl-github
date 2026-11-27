@@ -1,0 +1,14 @@
+.env
+.env.local
+__pycache__/
+*.pyc
+.venv/
+venv/
+data/uploads/*
+data/outputs/*
+!data/uploads/.gitkeep
+!data/outputs/.gitkeep
+.codeartsdoer/
+.security/
+.streamlit/
+.DS_Store
