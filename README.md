@@ -6,16 +6,42 @@
 
 - Python 3.10 及以上（推荐 3.12）
 
-## 本地安装与启动
+## 🔗 在线体验
+
+https://jl-resume.streamlit.app/
+
+> 免费层无流量时会休眠，首次打开约需 30 秒冷启动，属正常现象。
+
+## 已知问题
+
+| 问题 | 说明 | 处理方式 |
+|---|---|---|
+| 首次访问慢 | Streamlit 免费层休眠，唤醒约 30 秒 | 属正常，等待或刷新 |
+| 扫描件 / 转曲 PDF 读不出 | 图片型 PDF、设计软件导出的"文字转曲"PDF 提取不到文字 | 用 Word 另存为 PDF，或直接上传 .docx |
+| 单文件上限 5MB | 传输层限制（server.maxUploadSize） | 压缩或拆分文件 |
+| 分析文字上限 15000 字 | 超出部分不参与分析，界面会提示 | 精简到核心内容 |
+| 需要访问口令 | 公开链接防止被滥用 | 口令由维护者私下提供 |
+
+## 本地运行
 
 ```bash
+git clone https://github.com/piao-shun/Ajl-github.git
+cd Ajl-github
+
+python -m venv .venv
+.venv\Scripts\activate          # Windows
+# source .venv/bin/activate     # macOS / Linux
+
 pip install -r requirements.txt
-copy .env.example .env
-# 用记事本打开 .env，填写 DEEPSEEK_API_KEY
+```
+
+复制 `.env.example` 为 `.env`，填写其中的变量（具体变量名以 `.env.example` 为准，通常包括模型 Key、Base URL、模型名与访问口令）。
+
+```bash
 streamlit run app/ui/streamlit_app.py
 ```
 
-浏览器打开后：上传简历 → 填目标岗位 → 点「生成修改意见」→ 下载结果。
+浏览器打开 http://localhost:8501
 
 ## 环境变量（只写变量名）
 
@@ -26,12 +52,6 @@ streamlit run app/ui/streamlit_app.py
 | `DEEPSEEK_MODEL` | 否 | 默认 `deepseek-chat` |
 
 本地放在 `.env` 文件；云端放在 Streamlit 后台的 Secrets 里。
-
-## 已知限制（云端部署后）
-
-- 应用闲置一段时间会休眠，再次打开需要重新唤醒。
-- 首次打开约需 30 秒，属正常现象。
-- 云端不保存任何上传文件，每次打开都要重新上传简历。
 
 ## 项目结构
 
