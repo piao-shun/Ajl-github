@@ -64,6 +64,8 @@ def render_analysis(analysis):
             with st.expander(f"{i}. {item.get('section', '')}", expanded=(i == 1)):
                 if item.get("problem"):
                     st.markdown(f"**问题：** {item['problem']}")
+                if item.get("evidence"):
+                    st.caption(f"原文依据：{item['evidence']}")
                 if item.get("advice"):
                     st.markdown(f"**建议：** {item['advice']}")
                 if item.get("rewrite"):
