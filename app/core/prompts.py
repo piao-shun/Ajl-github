@@ -12,9 +12,29 @@ SYSTEM_PROMPT = (
 )
 
 
-def build_analysis_prompt(raw_text, target_job="", background=""):
+def build_analysis_prompt(raw_text, target_job="", background="", jd=""):
     job = target_job.strip() or "未指定（按通用优质简历标准）"
     bg = background.strip() or "未提供"
+    jd_text = (jd or "").strip()
+
+    # JD 为空时这两段都是空字符串，保证 jd 空场景下 prompt 与旧版逐字一致
+    extra_fields = ""
+    jd_section = ""
+    if jd_text:
+        extra_fields = (
+            ',\n'
+            '  "match_score": 0 到 100 的整数（简历与岗位 JD 的匹配度）,\n'
+            '  "jd_hits": ["简历已满足的 JD 要求"],\n'
+            '  "jd_gaps": ["简历缺失的 JD 要求"]'
+        )
+        jd_section = (
+            "\n岗位 JD：\n"
+            '"""\n'
+            f"{jd_text}\n"
+            '"""\n'
+            "\n请逐条判断简历是否命中 JD 要求，命中的写进 jd_hits，缺失的写进 jd_gaps。\n"
+        )
+
     return f"""请审阅下面的简历，输出一个 JSON 对象，字段如下：
 {{
   "score": 0 到 100 的整数,
@@ -29,12 +49,12 @@ def build_analysis_prompt(raw_text, target_job="", background=""):
     }}
   ],
   "keywords_missing": ["岗位需要但简历里缺失的关键词"],
-  "next_steps": ["接下来优先做的 3 件事，包括如何补上【需你补充】的内容"]
+  "next_steps": ["接下来优先做的 3 件事，包括如何补上【需你补充】的内容"]{extra_fields}
 }}
 
 目标岗位：{job}
 候选人背景：{bg}
-
+{jd_section}
 简历原文：
 \"\"\"
 {raw_text}

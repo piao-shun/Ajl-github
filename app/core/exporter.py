@@ -51,6 +51,10 @@ def build_docx(analysis, source_name=""):
     if score is not None:
         _add_para(doc, f"综合评分：{score}", size=13, bold=True, color=(192, 80, 77))
 
+    match_score = analysis.get("match_score")
+    if match_score is not None:
+        _add_para(doc, f"JD 匹配度：{match_score} / 100", size=13, bold=True, color=(60, 110, 160))
+
     if analysis.get("overall"):
         _add_para(doc, "总体评价", size=13, bold=True)
         _add_para(doc, analysis["overall"])
@@ -68,6 +72,18 @@ def build_docx(analysis, source_name=""):
                 _add_para(doc, f"建议：{item['advice']}")
             if item.get("rewrite"):
                 _add_para(doc, f"改写示例：{item['rewrite']}", color=(60, 110, 60))
+
+    jd_hits = analysis.get("jd_hits") or []
+    if jd_hits:
+        _add_para(doc, "已命中要求", size=13, bold=True)
+        for item in jd_hits:
+            _add_para(doc, f"- {item}")
+
+    jd_gaps = analysis.get("jd_gaps") or []
+    if jd_gaps:
+        _add_para(doc, "缺失要求", size=13, bold=True)
+        for item in jd_gaps:
+            _add_para(doc, f"- {item}")
 
     keywords = analysis.get("keywords_missing") or []
     if keywords:
@@ -103,6 +119,9 @@ def build_pdf(analysis, source_name=""):
     score = analysis.get("score")
     if score is not None:
         story.append(Paragraph(f"综合评分：{score}", styles["h"]))
+    match_score = analysis.get("match_score")
+    if match_score is not None:
+        story.append(Paragraph(f"JD 匹配度：{match_score} / 100", styles["h"]))
     if analysis.get("overall"):
         story.append(Paragraph("总体评价", styles["h"]))
         story.append(Paragraph(_esc(analysis["overall"]), styles["body"]))
@@ -116,6 +135,16 @@ def build_pdf(analysis, source_name=""):
             story.append(Paragraph(f"建议：{_esc(item['advice'])}", styles["body"]))
         if item.get("rewrite"):
             story.append(Paragraph(f"改写示例：{_esc(item['rewrite'])}", styles["body"]))
+    jd_hits = analysis.get("jd_hits") or []
+    if jd_hits:
+        story.append(Paragraph("已命中要求", styles["h"]))
+        for item in jd_hits:
+            story.append(Paragraph(f"- {_esc(item)}", styles["body"]))
+    jd_gaps = analysis.get("jd_gaps") or []
+    if jd_gaps:
+        story.append(Paragraph("缺失要求", styles["h"]))
+        for item in jd_gaps:
+            story.append(Paragraph(f"- {_esc(item)}", styles["body"]))
     if analysis.get("keywords_missing"):
         story.append(Paragraph("缺失关键词", styles["h"]))
         story.append(Paragraph(_esc("、".join(str(k) for k in analysis["keywords_missing"])), styles["body"]))
