@@ -60,6 +60,8 @@ def build_docx(analysis, source_name=""):
         _add_para(doc, "逐条修改意见", size=13, bold=True)
         for i, item in enumerate(suggestions, 1):
             _add_para(doc, f"{i}. {item.get('section', '')}", size=11, bold=True)
+            if item.get("evidence"):
+                _add_para(doc, f"原文依据：{item['evidence']}", size=9, color=(150, 150, 150))
             if item.get("problem"):
                 _add_para(doc, f"问题：{item['problem']}")
             if item.get("advice"):
@@ -106,6 +108,8 @@ def build_pdf(analysis, source_name=""):
         story.append(Paragraph(_esc(analysis["overall"]), styles["body"]))
     for i, item in enumerate(analysis.get("suggestions") or [], 1):
         story.append(Paragraph(f"{i}. {_esc(item.get('section', ''))}", styles["h"]))
+        if item.get("evidence"):
+            story.append(Paragraph(f"原文依据：{_esc(item['evidence'])}", styles["small"]))
         if item.get("problem"):
             story.append(Paragraph(f"问题：{_esc(item['problem'])}", styles["body"]))
         if item.get("advice"):
