@@ -10,5 +10,5 @@ data/outputs/*
 !data/outputs/.gitkeep
 .codeartsdoer/
 .security/
-.streamlit/
+.streamlit/secrets.toml
 .DS_Store

@@ -1,3 +1,4 @@
+import hmac
 import os
 import sys
 import tempfile
@@ -10,6 +11,10 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
+# 输入边界：文件最大 5MB，简历正文最多分析前 15000 字
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+MAX_CHARS = 15000
+
 # 云端部署时，Streamlit Secrets 不会自动变成环境变量，这里手动搬运一次
 # （只做搬运，绝不打印或展示 Key 的内容）
 try:
@@ -17,7 +22,7 @@ try:
 except Exception:
     _secrets = {}
 
-for _secret_key in ("DEEPSEEK_API_KEY", "DEEPSEEK_BASE_URL", "DEEPSEEK_MODEL"):
+for _secret_key in ("DEEPSEEK_API_KEY", "DEEPSEEK_BASE_URL", "DEEPSEEK_MODEL", "ACCESS_CODE"):
     if _secret_key in _secrets:
         os.environ[_secret_key] = str(_secrets[_secret_key])
 
@@ -29,6 +34,20 @@ from app.core.parser import parse_resume
 st.set_page_config(page_title="简历助手 jl", layout="wide")
 st.title("简历助手 jl")
 st.caption("上传简历 → AI 给出针对性修改意见 → 导出 Word / PDF")
+
+# 访问口令：只有设置了 ACCESS_CODE 才生效，本地不设则完全跳过
+_access_code = os.getenv("ACCESS_CODE", "").strip()
+if _access_code and not st.session_state.get("_authed"):
+    _input_code = st.text_input("访问口令", type="password")
+    if not _input_code:
+        # 没输入口令时停在当前页，不渲染后面的上传界面
+        st.stop()
+    if hmac.compare_digest(_input_code.encode("utf-8"), _access_code.encode("utf-8")):
+        st.session_state["_authed"] = True
+        st.rerun()
+    else:
+        st.error("访问口令不正确")
+        st.stop()
 
 
 def render_analysis(analysis):
@@ -71,6 +90,11 @@ if not uploaded:
     st.info("先上传一份简历开始。")
     st.stop()
 
+# 先卡文件大小，避免超大文件把解析撑爆
+if uploaded.size > MAX_UPLOAD_BYTES:
+    st.error("文件超过 5MB，请压缩后重试")
+    st.stop()
+
 # 上传文件放进临时目录，解析完就自动删除，云端不留下任何简历文件
 try:
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -101,9 +125,14 @@ with right:
         if not config.API_KEY:
             st.error("缺少 API Key，无法调用模型。请在 .env 或 Secrets 中填写后重启。")
         else:
+            # 简历太长时只分析前 15000 字，控制 token 消耗
+            raw_text = parsed["raw_text"]
+            if len(raw_text) > MAX_CHARS:
+                raw_text = raw_text[:MAX_CHARS]
+                st.warning("简历较长，仅分析前 15000 字")
             with st.spinner("AI 正在分析简历..."):
                 st.session_state["analysis"] = analyze_resume(
-                    parsed["raw_text"], target_job, background
+                    raw_text, target_job, background
                 )
                 st.session_state["source_name"] = parsed["filename"]
 
