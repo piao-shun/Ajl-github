@@ -31,6 +31,8 @@ def test_parse_docx_returns_text():
     assert result["kind"] == "docx"
     assert result["char_count"] > 0
     assert "张三" in result["raw_text"]
+    assert result["page_count"] is None
+    assert result["image_count"] == 0
 
 
 def test_parse_pdf_returns_text():
@@ -42,3 +44,5 @@ def test_parse_pdf_returns_text():
     assert result["kind"] == "pdf"
     assert result["char_count"] > 0
     assert "Zhang" in result["raw_text"]
+    assert result["page_count"] == 1
+    assert result["image_count"] == 0

@@ -108,6 +108,29 @@ except Exception as exc:
 for warning in parsed.get("warnings", []):
     st.warning(warning)
 
+# 文本太短直接中止：拿空文本让模型分析，只会得到凭空编造的建议
+if len(parsed["raw_text"].strip()) < config.MIN_TEXT_CHARS:
+    page_count = parsed.get("page_count")
+    st.error("没能从这份文件里提取到可用文字，已停止分析，避免模型凭空编造。")
+    st.markdown(
+        f"""
+**诊断信息**
+
+- 页数：{page_count if page_count is not None else "未知（.docx 没有页数概念）"}
+- 提取字符数：{parsed['char_count']}
+- 检测到图片：{parsed.get('image_count', 0)} 张
+
+**可能原因**
+
+1. 扫描件（图片型 PDF）
+2. 文字转曲（设计软件导出，文字被转成矢量轮廓）
+3. 加密或权限限制
+
+**建议**：用 Word 打开后另存为 PDF 再上传，或直接上传 .docx。
+"""
+    )
+    st.stop()
+
 left, right = st.columns([1, 1])
 with left:
     st.subheader("解析结果")

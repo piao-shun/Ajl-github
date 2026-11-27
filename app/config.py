@@ -24,3 +24,5 @@ BASE_URL = (
 ).strip()
 MODEL = (os.getenv("DEEPSEEK_MODEL") or os.getenv("MODEL") or "deepseek-chat").strip()
 MAX_TOKENS = int(os.getenv("MAX_TOKENS", "4096"))
+# 文本少于这个字符数就认定没有有效内容，直接中止，不调用模型
+MIN_TEXT_CHARS = 50

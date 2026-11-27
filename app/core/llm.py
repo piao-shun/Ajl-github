@@ -60,6 +60,11 @@ def _safe_json(text):
 
 
 def analyze_resume(raw_text, target_job="", background=""):
+    if len((raw_text or "").strip()) < config.MIN_TEXT_CHARS:
+        # 文本过短时直接返回错误，不调用模型，避免凭空编造
+        return {
+            "error": "简历文本过短（少于 50 个字符），未调用模型。请上传可复制文字的 PDF 或 .docx。"
+        }
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": build_analysis_prompt(raw_text, target_job, background)},

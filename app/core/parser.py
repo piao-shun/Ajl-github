@@ -46,16 +46,21 @@ def _read_docx(path: Path):
             cells = [cell.text.strip() for cell in row.cells if cell.text.strip()]
             if cells:
                 lines.append(" | ".join(cells))
-    return lines
+    # .docx 没有可靠的页数概念，返回 None；图片数统计内联图片
+    image_count = len(doc.inline_shapes)
+    return lines, None, image_count
 
 
 def _read_pdf(path: Path):
     lines = []
+    image_count = 0
     with pdfplumber.open(str(path)) as pdf:
+        page_count = len(pdf.pages)
         for page in pdf.pages:
             text = page.extract_text() or ""
             lines.extend(text.splitlines())
-    return lines
+            image_count += len(page.images)
+    return lines, page_count, image_count
 
 
 def parse_resume(path):
@@ -64,9 +69,9 @@ def parse_resume(path):
     warnings = []
 
     if suffix == ".docx":
-        lines = _read_docx(path)
+        lines, page_count, image_count = _read_docx(path)
     elif suffix == ".pdf":
-        lines = _read_pdf(path)
+        lines, page_count, image_count = _read_pdf(path)
     elif suffix == ".doc":
         raise ValueError("旧版 .doc 暂不支持，请用 Word 另存为 .docx 后再上传")
     else:
@@ -74,7 +79,7 @@ def parse_resume(path):
 
     raw_text = "\n".join(line for line in (l.strip() for l in lines) if line)
     if not raw_text.strip():
-        warnings.append("没有解析到文字，可能是扫描版 PDF（图片），需要 OCR 才能读取")
+        warnings.append("没有解析到文字，可能是扫描版 PDF（图片）或文字已转曲，需要 OCR 才能读取")
 
     return {
         "filename": path.name,
@@ -82,5 +87,7 @@ def parse_resume(path):
         "raw_text": raw_text,
         "sections": _split_sections(lines),
         "char_count": len(raw_text),
+        "page_count": page_count,
+        "image_count": image_count,
         "warnings": warnings,
     }
