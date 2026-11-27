@@ -59,7 +59,7 @@ def _safe_json(text):
     return None
 
 
-def analyze_resume(raw_text, target_job="", background=""):
+def analyze_resume(raw_text, target_job="", background="", jd=""):
     if len((raw_text or "").strip()) < config.MIN_TEXT_CHARS:
         # 文本过短时直接返回错误，不调用模型，避免凭空编造
         return {
@@ -67,7 +67,7 @@ def analyze_resume(raw_text, target_job="", background=""):
         }
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": build_analysis_prompt(raw_text, target_job, background)},
+        {"role": "user", "content": build_analysis_prompt(raw_text, target_job, background, jd)},
     ]
     try:
         content = chat(messages, json_mode=True)

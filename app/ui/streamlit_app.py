@@ -54,9 +54,26 @@ def render_analysis(analysis):
     score = analysis.get("score")
     if score is not None:
         st.metric("综合评分", f"{score} / 100")
+    match_score = analysis.get("match_score")
+    if match_score is not None:
+        st.metric("JD 匹配度", f"{match_score} / 100")
     if analysis.get("overall"):
         st.subheader("总体评价")
         st.write(analysis["overall"])
+
+    jd_hits = analysis.get("jd_hits") or []
+    jd_gaps = analysis.get("jd_gaps") or []
+    if jd_hits or jd_gaps:
+        hit_col, gap_col = st.columns(2)
+        with hit_col:
+            st.subheader("已命中要求")
+            for item in jd_hits:
+                st.markdown(f"- {item}")
+        with gap_col:
+            st.subheader("缺失要求")
+            for item in jd_gaps:
+                st.markdown(f"- {item}")
+
     suggestions = analysis.get("suggestions") or []
     if suggestions:
         st.subheader("逐条修改意见")
@@ -141,6 +158,11 @@ with left:
 with right:
     st.subheader("补充信息")
     target_job = st.text_input("目标岗位", placeholder="例如：通信算法工程师 / 后端开发 / 产品经理")
+    jd_input = st.text_area(
+        "岗位 JD（可选，粘贴招聘信息全文）",
+        placeholder="把招聘信息里的岗位职责、任职要求整段粘贴进来",
+        height=220,
+    )
     background = st.text_area(
         "你的背景 / 想做什么职业",
         placeholder="例如：通信工程大三，做过单片机项目，在中国移动实习，想进入通信行业做研发",
@@ -155,15 +177,22 @@ with right:
             if len(raw_text) > MAX_CHARS:
                 raw_text = raw_text[:MAX_CHARS]
                 st.warning("简历较长，仅分析前 15000 字")
+            # JD 超过上限时截断，避免 prompt 过长
+            jd_text, jd_truncated = config.prepare_jd(jd_input)
+            if jd_truncated:
+                st.warning("JD 较长，仅比对前 3000 字")
             with st.spinner("AI 正在分析简历..."):
                 st.session_state["analysis"] = analyze_resume(
-                    raw_text, target_job, background
+                    raw_text, target_job, background, jd_text
                 )
                 st.session_state["source_name"] = parsed["filename"]
+                st.session_state["jd_used"] = bool(jd_text)
 
 analysis = st.session_state.get("analysis")
 if analysis:
     st.divider()
+    if st.session_state.get("jd_used"):
+        st.caption("本次分析基于岗位 JD")
     if "error" in analysis:
         # 模型或解析出错时只展示错误，不渲染残缺结果
         st.error(analysis["error"])
