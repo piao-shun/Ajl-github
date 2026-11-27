@@ -73,3 +73,5 @@ python -m pytest -q
 - P1：支持岗位 JD 粘贴，意见按 JD 关键词打分
 - P2：一键改写正文并回填到 Word 原格式
 - P3：简历模板库 + RAG 检索
+
+- 🔗 在线体验：https://jl-resume.streamlit.app/
