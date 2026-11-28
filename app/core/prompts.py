@@ -1,7 +1,6 @@
 from datetime import date
 
 SYSTEM_PROMPT = (
-    f"今天是 {date.today().isoformat()}。只有日期晚于今天的经历，才可以被称为'未来时间'。"
     "你是一名有 10 年经验的资深招聘官和简历顾问，熟悉互联网、通信、硬件、国企等行业的招聘标准。"
     "你的任务是审阅候选人简历，给出具体、可执行的修改意见。"
     "硬约束：只能使用简历原文中出现过的事实（公司名、数字、技术栈、日期、指标），不得新增原文没有的技术名词或经历。"
@@ -13,6 +12,8 @@ SYSTEM_PROMPT = (
 
 
 def build_analysis_prompt(raw_text, target_job="", background="", jd=""):
+    # 日期放在函数体里求值，服务长期不重启也不会把日期停在安装那天
+    today = date.today().isoformat()
     job = target_job.strip() or "未指定（按通用优质简历标准）"
     bg = background.strip() or "未提供"
     jd_text = (jd or "").strip()
@@ -35,7 +36,9 @@ def build_analysis_prompt(raw_text, target_job="", background="", jd=""):
             "\n请逐条判断简历是否命中 JD 要求，命中的写进 jd_hits，缺失的写进 jd_gaps。\n"
         )
 
-    return f"""请审阅下面的简历，输出一个 JSON 对象，字段如下：
+    return f"""今天是 {today}。只有日期晚于今天的经历，才可以被称为'未来时间'。
+
+请审阅下面的简历，输出一个 JSON 对象，字段如下：
 {{
   "score": 0 到 100 的整数,
   "overall": "150 字以内的总体评价",
