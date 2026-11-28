@@ -28,6 +28,7 @@ for _secret_key in ("DEEPSEEK_API_KEY", "DEEPSEEK_BASE_URL", "DEEPSEEK_MODEL", "
 
 from app import config
 from app.core.exporter import build_docx, build_pdf
+from app.core.job_profile import load_profiles, match_direction, search_url
 from app.core.llm import analyze_resume
 from app.core.parser import parse_resume
 
@@ -48,6 +49,20 @@ if _access_code and not st.session_state.get("_authed"):
     else:
         st.error("访问口令不正确")
         st.stop()
+
+# 方向标准加载失败时直接报错，不静默跳过
+try:
+    profiles = load_profiles()
+except Exception as exc:
+    st.error(f"方向配置加载失败：{exc}")
+    st.stop()
+
+LEVEL_LABELS = {
+    "have": "✅ 已具备",
+    "partial": "⚠️ 部分具备",
+    "missing": "❌ 缺失",
+    "unknown": "❓ 未体现",
+}
 
 
 def render_analysis(analysis):
@@ -94,6 +109,37 @@ def render_analysis(analysis):
         st.subheader("下一步优先做")
         for step in analysis["next_steps"]:
             st.markdown(f"- {step}")
+
+
+def render_direction(result, profile):
+    st.subheader(f"方向诊断：{profile.get('name', '')}")
+    if result.get("summary"):
+        st.write(result["summary"])
+
+    rows = []
+    for row in result.get("table", []):
+        rows.append(
+            {
+                "要求": row.get("item", ""),
+                "状态": LEVEL_LABELS.get(row.get("level"), LEVEL_LABELS["unknown"]),
+                "依据": row.get("evidence", ""),
+                "说明": row.get("note", ""),
+            }
+        )
+    st.table(rows)
+    st.caption("以上为行业通用要求，具体岗位以 JD 为准")
+
+    priorities = result.get("priorities") or []
+    if priorities:
+        st.subheader("优先补什么")
+        for entry in priorities:
+            st.markdown(f"**{entry.get('item', '')}**")
+            st.markdown(f"- 为什么：{entry.get('reason', '')}")
+            st.markdown(f"- 怎么补：{entry.get('how', '')}")
+
+    keywords = profile.get("search_keywords") or []
+    if keywords:
+        st.link_button("去 BOSS 看这类岗位", search_url(keywords[0]))
 
 
 with st.sidebar:
@@ -157,6 +203,14 @@ with left:
     st.text_area("简历原文", parsed["raw_text"], height=420, disabled=True)
 with right:
     st.subheader("补充信息")
+
+    direction_keys = list(profiles.keys())
+    direction_names = [profiles[key]["name"] for key in direction_keys]
+    selected_name = st.selectbox("想去的方向", ["不选方向"] + direction_names)
+    selected_direction = None
+    if selected_name in direction_names:
+        selected_direction = direction_keys[direction_names.index(selected_name)]
+
     target_job = st.text_input("目标岗位", placeholder="例如：通信算法工程师 / 后端开发 / 产品经理")
     jd_input = st.text_area(
         "岗位 JD（可选，粘贴招聘信息全文）",
@@ -168,28 +222,68 @@ with right:
         placeholder="例如：通信工程大三，做过单片机项目，在中国移动实习，想进入通信行业做研发",
         height=200,
     )
-    if st.button("生成修改意见", type="primary"):
-        if not config.API_KEY:
-            st.error("缺少 API Key，无法调用模型。请在 .env 或 Secrets 中填写后重启。")
-        else:
-            # 简历太长时只分析前 15000 字，控制 token 消耗
-            raw_text = parsed["raw_text"]
-            if len(raw_text) > MAX_CHARS:
-                raw_text = raw_text[:MAX_CHARS]
-                st.warning("简历较长，仅分析前 15000 字")
-            # JD 超过上限时截断，避免 prompt 过长
-            jd_text, jd_truncated = config.prepare_jd(jd_input)
-            if jd_truncated:
-                st.warning("JD 较长，仅比对前 3000 字")
-            with st.spinner("AI 正在分析简历..."):
-                st.session_state["analysis"] = analyze_resume(
-                    raw_text, target_job, background, jd_text
-                )
-                st.session_state["source_name"] = parsed["filename"]
-                st.session_state["jd_used"] = bool(jd_text)
+
+    tab_direction, tab_jd = st.tabs(["方向诊断", "JD 精筛"])
+
+    with tab_direction:
+        if st.button("诊断这个方向", type="primary", disabled=(not selected_direction)):
+            if not selected_direction:
+                st.warning("先在上方选择一个方向")
+            elif not config.API_KEY:
+                st.error("缺少 API Key，无法调用模型。请在 .env 或 Secrets 中填写后重启。")
+            else:
+                direction_text = parsed["raw_text"]
+                if len(direction_text) > MAX_CHARS:
+                    direction_text = direction_text[:MAX_CHARS]
+                    st.warning("简历较长，仅分析前 15000 字")
+                with st.spinner("AI 正在诊断方向..."):
+                    st.session_state["direction_result"] = match_direction(
+                        direction_text,
+                        selected_direction,
+                        profiles[selected_direction],
+                        background,
+                    )
+                    st.session_state["direction_key"] = selected_direction
+                    # 两块结果互斥：只显示最近一次操作的那一块
+                    st.session_state["active_view"] = "direction"
+
+    with tab_jd:
+        if st.button("生成修改意见", type="primary"):
+            if not config.API_KEY:
+                st.error("缺少 API Key，无法调用模型。请在 .env 或 Secrets 中填写后重启。")
+            else:
+                # 简历太长时只分析前 15000 字，控制 token 消耗
+                raw_text = parsed["raw_text"]
+                if len(raw_text) > MAX_CHARS:
+                    raw_text = raw_text[:MAX_CHARS]
+                    st.warning("简历较长，仅分析前 15000 字")
+                # JD 超过上限时截断，避免 prompt 过长
+                jd_text, jd_truncated = config.prepare_jd(jd_input)
+                if jd_truncated:
+                    st.warning("JD 较长，仅比对前 3000 字")
+                with st.spinner("AI 正在分析简历..."):
+                    st.session_state["analysis"] = analyze_resume(
+                        raw_text, target_job, background, jd_text
+                    )
+                    st.session_state["source_name"] = parsed["filename"]
+                    st.session_state["jd_used"] = bool(jd_text)
+                    # 两块结果互斥：只显示最近一次操作的那一块
+                    st.session_state["active_view"] = "jd"
+
+active_view = st.session_state.get("active_view")
+
+direction_result = st.session_state.get("direction_result")
+if active_view == "direction" and direction_result:
+    st.divider()
+    if "error" in direction_result:
+        st.error(direction_result["error"])
+    else:
+        direction_profile = profiles.get(st.session_state.get("direction_key", ""))
+        if direction_profile:
+            render_direction(direction_result, direction_profile)
 
 analysis = st.session_state.get("analysis")
-if analysis:
+if active_view == "jd" and analysis:
     st.divider()
     if st.session_state.get("jd_used"):
         st.caption("本次分析基于岗位 JD")
