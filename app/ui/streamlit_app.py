@@ -141,8 +141,9 @@ def render_direction(result, profile):
             debug = result.get("_debug") or {}
             st.write("第一次返回（截断 800 字）：")
             st.text(debug.get("raw_first", ""))
-            st.write("第二次返回（截断 800 字）：")
-            st.text(debug.get("raw_second", ""))
+            if debug.get("raw_second"):
+                st.write("第二次返回（截断 800 字）：")
+                st.text(debug.get("raw_second", ""))
             st.write(f"命中的序号：{debug.get('matched_indexes', [])}")
 
     priorities = result.get("priorities") or []
@@ -185,6 +186,13 @@ try:
 except Exception as exc:
     st.error(f"解析失败：{exc}")
     st.stop()
+
+# 换文件时清空上一份的分析结果（必须发生在渲染结果之前，否则这一帧还会闪旧数据）
+previous_file_id = st.session_state.get("uploaded_file_id")
+current_file_id = getattr(uploaded, "file_id", None)
+if config.should_reset_session(previous_file_id, current_file_id):
+    config.clear_result_state(st.session_state)
+st.session_state["uploaded_file_id"] = current_file_id
 
 for warning in parsed.get("warnings", []):
     st.warning(warning)
@@ -282,7 +290,7 @@ with right:
                         raw_text, target_job, background, jd_text
                     )
                     st.session_state["source_name"] = parsed["filename"]
-                    st.session_state["jd_used"] = bool(jd_text)
+                    st.session_state["jd_fingerprint"] = config.jd_fingerprint(jd_text)
                     # 两块结果互斥：只显示最近一次操作的那一块
                     st.session_state["active_view"] = "jd"
 
@@ -300,8 +308,9 @@ if active_view == "direction" and direction_result:
                 st.write(f"问题：{error_debug.get('problems', [])}")
                 st.write("第一次返回（截断 800 字）：")
                 st.text(error_debug.get("raw_first", ""))
-                st.write("第二次返回（截断 800 字）：")
-                st.text(error_debug.get("raw_second", ""))
+                if error_debug.get("raw_second"):
+                    st.write("第二次返回（截断 800 字）：")
+                    st.text(error_debug.get("raw_second", ""))
     else:
         direction_profile = profiles.get(st.session_state.get("direction_key", ""))
         if direction_profile:
@@ -310,8 +319,13 @@ if active_view == "direction" and direction_result:
 analysis = st.session_state.get("analysis")
 if active_view == "jd" and analysis:
     st.divider()
-    if st.session_state.get("jd_used"):
-        st.caption("本次分析基于岗位 JD")
+    if st.session_state.get("jd_fingerprint", ""):
+        stored_jd_fp = st.session_state.get("jd_fingerprint", "")
+        if config.jd_changed(stored_jd_fp, jd_input):
+            # JD 改了但没重新分析：明确提示，避免用户以为结果还是最新的
+            st.info("JD 已修改，请重新分析")
+        else:
+            st.caption("本次分析基于岗位 JD")
     if "error" in analysis:
         # 模型或解析出错时只展示错误，不渲染残缺结果
         st.error(analysis["error"])
