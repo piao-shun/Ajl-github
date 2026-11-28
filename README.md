@@ -1,97 +1,69 @@
-# 简历助手（jl）
+# 简历助手 (JL)
 
-上传 Word / PDF 简历 → AI 给出针对性修改意见 → 导出 Word / PDF。
+一句话：上传简历 + 贴岗位 JD → AI 给出可执行的修改建议，支持导出 Word/PDF。
 
-## 环境要求
+🔗 在线体验：https://jl-resume.streamlit.app/
+（首次打开需等 30 秒冷启动；站点设有访问口令，请向作者索取）
 
-- Python 3.10 及以上（推荐 3.12）
+![整体界面](docs/images/01-overview.png)
 
-## 🔗 在线体验
+## 它解决什么问题
 
-https://jl-resume.streamlit.app/
+- **简历不知道改哪**：AI 逐条指出问题并给出可直接替换的改写示例，每条建议都标注「原文依据」，不会凭空编造。
+- **JD 不知道对不对得上**：贴上完整招聘信息，返回匹配度评分、已命中与缺失的要求清单，而不是一句「还不错」。
+- **换方向不知道差什么**：按五个行业的通用标准逐项评估能力缺口，告诉你先补哪一个、怎么补。
 
-> 免费层无流量时会休眠，首次打开约需 30 秒冷启动，属正常现象。
+## 三个功能
+
+### 1. 简历分析（贴 JD 时给出匹配度）
+
+![JD 匹配度](docs/images/03-jd-score.png)
+
+![逐条建议](docs/images/04-jd-detail.png)
+
+要点：
+
+- 每条建议都带「原文依据」，逐字引自简历；找不到依据就不提这条
+- 改写示例里凡是原文没有的内容，统一用【需你补充】标出，避免用户直接抄成造假
+
+### 2. 方向诊断（按行业标准评估能力缺口）
+
+![方向诊断](docs/images/02-direction.png)
+
+- 四档状态：已具备 / 部分具备 / 缺失 / 未体现
+- 「未体现」专门指简历没写但用户可能具备，与「缺失」严格区分
+- 五个方向：后端 / 前端 / 嵌入式 / 测试 / AI 应用
+
+### 3. 导出 Word / PDF
+
+分析结果一键导出 Word 和 PDF，生成过程全部在内存完成，云端不落盘，也不保存任何上传文件。
+
+## 设计上的三个取舍（面试会问）
+
+1. **Key 只在服务端**：前端透明、后端保密，浏览器永远拿不到 Key。
+2. **先 Streamlit 后前后端分离**：先验证链路能跑通，再考虑换实现。
+3. **模型输出必须校验 + 重试**：模型返回结构不稳定，静默失败比崩溃更危险；两次仍不合格就明确报错，绝不渲染成「全部缺失」。
 
 ## 已知问题
 
-| 问题 | 说明 | 处理方式 |
-|---|---|---|
-| 首次访问慢 | Streamlit 免费层休眠，唤醒约 30 秒 | 属正常，等待或刷新 |
-| 扫描件 / 转曲 PDF 读不出 | 图片型 PDF、设计软件导出的"文字转曲"PDF 提取不到文字 | 用 Word 另存为 PDF，或直接上传 .docx |
-| 单文件上限 5MB | 传输层限制（server.maxUploadSize） | 压缩或拆分文件 |
-| 分析文字上限 15000 字 | 超出部分不参与分析，界面会提示 | 精简到核心内容 |
-| 需要访问口令 | 公开链接防止被滥用 | 口令由维护者私下提供 |
+- 免费层首次访问有 30 秒冷启动。
+- 扫描件、文字转曲（设计软件导出）的 PDF 提取不到文字，会明确报错并提示原因，不会硬分析。
+- 刷新页面会清空结果。
+- 方向诊断偶尔需要点第二次（模型单次未必返回完整表格）。
 
 ## 本地运行
 
 ```bash
-git clone https://github.com/piao-shun/Ajl-github.git
-cd Ajl-github
-
-python -m venv .venv
-.venv\Scripts\activate          # Windows
-# source .venv/bin/activate     # macOS / Linux
-
 pip install -r requirements.txt
-```
-
-复制 `.env.example` 为 `.env`，填写其中的变量（具体变量名以 `.env.example` 为准，通常包括模型 Key、Base URL、模型名与访问口令）。
-
-```bash
+copy .env.example .env
 streamlit run app/ui/streamlit_app.py
 ```
 
-浏览器打开 http://localhost:8501
+`.env` 里需要填两个变量：
 
-## 环境变量（只写变量名）
+- `DEEPSEEK_API_KEY`：模型 Key，在 DeepSeek 控制台申请
+- `ACCESS_CODE`：访问口令，本地留空则跳过校验
 
-| 变量名 | 必填 | 说明 |
-|---|---|---|
-| `DEEPSEEK_API_KEY` | 是 | DeepSeek 的 API Key |
-| `DEEPSEEK_BASE_URL` | 否 | 默认 `https://api.deepseek.com/v1` |
-| `DEEPSEEK_MODEL` | 否 | 默认 `deepseek-chat` |
+## 技术栈
 
-本地放在 `.env` 文件；云端放在 Streamlit 后台的 Secrets 里。
-
-## 项目结构
-
-```
-app/
-  config.py            读环境变量，统一配置
-  core/parser.py       解析 Word / PDF 简历
-  core/llm.py          调大模型（超时 + 重试 + JSON 容错）
-  core/prompts.py      简历修改提示词
-  core/exporter.py     生成 Word / PDF（内存字节流）
-  ui/streamlit_app.py  主界面
-  main.py              FastAPI 接口（预留）
-tests/
-  test_parser.py       解析测试
-  test_exporter.py     导出测试
-data/
-  samples/             假简历示例（张三，仅供测试）
-```
-
-## 测试
-
-```bash
-python -m pytest -q
-```
-
-测试不调用模型，只验证解析和导出。
-
-## 知识路线（边做边学）
-
-| 你将学到 | 在 jl 里对应哪部分 |
-|---|---|
-| 什么是 AI / LLM / token / prompt | `core/llm.py` `core/prompts.py` |
-| 什么是 Agent（会自己调工具的 AI） | 后续「解析→分析→改写→导出」串联成工作流 |
-| 什么是 RAG（先查资料再回答） | 后续把优秀简历模板 / 岗位 JD 放进向量库 |
-| 什么是 Skill（可复用的能力包） | 把「按岗位定制」「量化改写」抽成独立模块 |
-
-## 后续计划
-
-- P1：支持岗位 JD 粘贴，意见按 JD 关键词打分
-- P2：一键改写正文并回填到 Word 原格式
-- P3：简历模板库 + RAG 检索
-
-- 🔗 在线体验：https://jl-resume.streamlit.app/
+Python 3.12 / Streamlit / openai SDK（DeepSeek，OpenAI 兼容）/ python-docx / pdfplumber / reportlab / python-dotenv
