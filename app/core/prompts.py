@@ -98,6 +98,7 @@ def build_direction_prompt(raw_text, profile, background=""):
 }}
 
 item 必须逐字复制下列要求，包括其中的空格；同时返回 index（1 到 {total}，对应下面列表的序号）。
+index 必须从 1 开始，与列表序号严格一致，不得跳号、不得重号。
 
 行业标准（core，请按顺序逐条判断，table 必须覆盖全部）：
 {core_lines}

@@ -3,7 +3,12 @@ import json
 import pytest
 
 from app.core import prompts
-from app.core.job_profile import load_profiles, normalize_direction_result, search_url
+from app.core.job_profile import (
+    _normalize_text,
+    load_profiles,
+    normalize_direction_result,
+    search_url,
+)
 
 
 def test_all_profiles_pass_validation():
@@ -167,3 +172,7 @@ def test_index_alignment_wins_even_if_text_differs():
     assert result["table"][1]["level"] == "unknown"
     assert "模型未返回" in result["table"][1]["note"]
     assert result["table"][2]["level"] == "have"
+
+def test_normalization_keeps_plus_and_hash():
+    assert _normalize_text("C++") != _normalize_text("C")
+    assert _normalize_text("C#") != _normalize_text("C")

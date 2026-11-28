@@ -17,8 +17,9 @@ ITEM_KEYS = ("item", "要求", "name")
 
 def _normalize_text(text):
     # 全角转半角、去掉空白和标点、统一小写，用于模糊对齐
+    # 只保留字母数字和 + #：C++、C# 与 C 是不同条目，不能把 + 和 # 抹掉
     text = unicodedata.normalize("NFKC", str(text or ""))
-    text = re.sub(r"[\s\W_]+", "", text)
+    text = re.sub(r"[^\w+#]+", "", text)
     return text.lower()
 
 
@@ -70,7 +71,8 @@ def normalize_direction_result(data, direction, profile):
             index = int(row.get("index"))
         except (TypeError, ValueError):
             continue
-        by_index[index] = row
+        # 重复 index 时保留第一次出现的行，避免后面的覆盖前面
+        by_index.setdefault(index, row)
 
     # 对齐方式二：按归一化后的 item 文本对齐，兼容 key 别名和空格差异
     by_text = {}
