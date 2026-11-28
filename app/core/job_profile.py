@@ -61,7 +61,7 @@ def load_profiles(path=None):
     return normalized
 
 
-def _validate_direction_data(data):
+def _validate_direction_data(data, total=None):
     # 返回问题列表；空列表表示结构合格
     problems = []
 
@@ -81,16 +81,43 @@ def _validate_direction_data(data):
         problems.append("table 里没有任何有效行")
         return problems
 
-    has_identifier = any(
-        row.get("index") is not None or _row_item(row) for row in dict_rows
-    )
-    if not has_identifier:
+    identifiable_count = _count_identifiable(data)
+    if identifiable_count == 0:
         problems.append("table 里没有任何一行带 index 或 item/要求/name，无法识别条目")
+    elif total is not None and identifiable_count < total:
+        # 唯一项数不足也交给重试逻辑处理（重复 index 只算一项）
+        problems.append(f"只返回了 {identifiable_count} 项，期望 {total} 项")
 
     return problems
 
 
-def normalize_direction_result(data, direction, profile):
+def _row_key(row):
+    # 每行只取一个标识：优先 index，没有 index 再用归一化文本
+    index = row.get("index")
+    if index is not None:
+        try:
+            return ("index", int(index))
+        except (TypeError, ValueError):
+            pass
+    text = _normalize_text(_row_item(row))
+    if text:
+        return ("text", text)
+    return None
+
+
+def _count_identifiable(data):
+    if not isinstance(data, dict):
+        return 0
+    rows = [row for row in (data.get("table") or []) if isinstance(row, dict)]
+    # 用集合去重：5 行但只有 3 个唯一 index，只算 3 项
+    keys = {_row_key(row) for row in rows}
+    keys.discard(None)
+    return len(keys)
+
+
+def normalize_direction_result(
+    data, direction, profile, missing_note="（模型未返回此项，结果可能不完整）"
+):
     rows = [row for row in (data.get("table") or []) if isinstance(row, dict)]
 
     # 对齐方式一：按模型返回的 index 对齐，最稳
@@ -125,7 +152,7 @@ def normalize_direction_result(data, direction, profile):
                     "item": name,
                     "level": "unknown",
                     "evidence": "",
-                    "note": "（模型未返回此项，结果可能不完整）",
+                    "note": missing_note,
                 }
             )
             continue
@@ -160,11 +187,8 @@ def normalize_direction_result(data, direction, profile):
                 }
             )
 
-    # 调试信息：保留整段模型返回，页面展开时才能看到到底返回了什么
-    debug = {
-        "raw": json.dumps(data, ensure_ascii=False)[:800],
-        "matched_indexes": matched_indexes,
-    }
+    # 调试信息：匹配命中的序号；原始返回由 match_direction 补两次内容
+    debug = {"matched_indexes": matched_indexes}
 
     return {
         "direction": direction,
@@ -173,6 +197,15 @@ def normalize_direction_result(data, direction, profile):
         "priorities": priorities,
         "_debug": debug,
     }
+
+
+def _with_debug(result, first_content, second_content):
+    # 两次原始返回都留，排查“第一次为什么错、第二次为什么还错”才有依据
+    debug = result.get("_debug") or {}
+    debug["raw_first"] = (first_content or "")[:800]
+    debug["raw_second"] = (second_content or "")[:800]
+    result["_debug"] = debug
+    return result
 
 
 def match_direction(resume_text, direction, profile, background=""):
@@ -187,16 +220,19 @@ def match_direction(resume_text, direction, profile, background=""):
         {"role": "user", "content": build_direction_prompt(resume_text, profile, bg_text)},
     ]
 
+    first_content = ""
+    second_content = ""
+
     try:
-        content = chat(messages, json_mode=True)
+        first_content = chat(messages, json_mode=True)
     except Exception as exc:
         return {"error": f"调用模型失败：{exc}"}
 
-    data = _safe_json(content)
+    data = _safe_json(first_content)
     if not isinstance(data, dict):
         problems = ["模型返回的不是 JSON 对象"]
     else:
-        problems = _validate_direction_data(data)
+        problems = _validate_direction_data(data, total)
 
     if problems:
         # 第 2 次调用：把具体问题和 schema 一起告诉模型
@@ -213,24 +249,44 @@ def match_direction(resume_text, direction, profile, background=""):
             }
         ]
         try:
-            content = chat(retry_messages, json_mode=True)
+            second_content = chat(retry_messages, json_mode=True)
         except Exception as exc:
             return {"error": f"调用模型失败：{exc}"}
 
-        data = _safe_json(content)
+        data = _safe_json(second_content)
         if not isinstance(data, dict):
             problems = ["模型第二次返回的不是 JSON 对象"]
         else:
-            problems = _validate_direction_data(data)
+            problems = _validate_direction_data(data, total)
 
         if problems:
-            # 失败态只返回 error，绝不带 table，避免上层误渲染成“全部未体现”
+            identifiable = _count_identifiable(data)
+            if identifiable > 0:
+                # 部分成功：表格非空但不完整，返回 partial 让页面照常渲染并提示
+                result = normalize_direction_result(
+                    data, direction, profile, missing_note="（本次未返回）"
+                )
+                result["partial"] = True
+                result["returned"] = identifiable
+                result["missing"] = [
+                    row["item"]
+                    for row in result["table"]
+                    if row["note"] == "（本次未返回）"
+                ]
+                return _with_debug(result, first_content, second_content)
+
+            # 完全失败：只回 error，绝不带 table
             return {
                 "error": "模型返回格式异常（缺少能力表格），请再点一次重试",
-                "debug": {"raw": (content or "")[:800], "problems": problems},
+                "debug": {
+                    "raw_first": (first_content or "")[:800],
+                    "raw_second": (second_content or "")[:800],
+                    "problems": problems,
+                },
             }
 
-    return normalize_direction_result(data, direction, profile)
+    result = normalize_direction_result(data, direction, profile)
+    return _with_debug(result, first_content, second_content)
 
 
 def search_url(keyword):

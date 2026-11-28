@@ -112,6 +112,10 @@ def render_analysis(analysis):
 
 
 def render_direction(result, profile):
+    total = len(profile.get("core", []))
+    if result.get("partial"):
+        returned = result.get("returned", len(result.get("table", [])))
+        st.warning(f"本次只返回了 {returned}/{total} 项，缺失项已标注，建议再点一次重试")
     st.subheader(f"方向诊断：{profile.get('name', '')}")
     if result.get("summary"):
         st.write(result["summary"])
@@ -130,13 +134,15 @@ def render_direction(result, profile):
     st.caption("以上为行业通用要求，具体岗位以 JD 为准")
 
     missing_rows = [
-        row for row in result.get("table", []) if "模型未返回" in row.get("note", "")
+        row for row in result.get("table", []) if "未返回" in row.get("note", "")
     ]
     if missing_rows:
         with st.expander("为什么有些是未体现？"):
             debug = result.get("_debug") or {}
-            st.write("模型返回的原始 JSON（截断 800 字）：")
-            st.text(debug.get("raw", ""))
+            st.write("第一次返回（截断 800 字）：")
+            st.text(debug.get("raw_first", ""))
+            st.write("第二次返回（截断 800 字）：")
+            st.text(debug.get("raw_second", ""))
             st.write(f"命中的序号：{debug.get('matched_indexes', [])}")
 
     priorities = result.get("priorities") or []
@@ -292,7 +298,10 @@ if active_view == "direction" and direction_result:
         if error_debug:
             with st.expander("查看模型原始返回（调试）"):
                 st.write(f"问题：{error_debug.get('problems', [])}")
-                st.text(error_debug.get("raw", ""))
+                st.write("第一次返回（截断 800 字）：")
+                st.text(error_debug.get("raw_first", ""))
+                st.write("第二次返回（截断 800 字）：")
+                st.text(error_debug.get("raw_second", ""))
     else:
         direction_profile = profiles.get(st.session_state.get("direction_key", ""))
         if direction_profile:

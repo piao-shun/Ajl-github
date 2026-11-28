@@ -248,3 +248,80 @@ def test_valid_first_time_no_retry(monkeypatch):
 
     assert len(calls) == 1
     assert len(result["table"]) == 5
+
+def _table_with_rows(count):
+    names = ["A", "B", "C", "D", "E"][:count]
+    return {
+        "summary": "部分",
+        "table": [
+            {"index": i, "item": name, "level": "have", "evidence": "e", "note": "n"}
+            for i, name in enumerate(names, 1)
+        ],
+        "priorities": [],
+    }
+
+
+def test_retry_fills_missing_rows(monkeypatch):
+    responses = [
+        json.dumps(_table_with_rows(3), ensure_ascii=False),
+        json.dumps(_table_with_rows(5), ensure_ascii=False),
+    ]
+    calls = []
+
+    def fake_chat(messages, **kwargs):
+        calls.append(messages)
+        return responses[len(calls) - 1]
+
+    monkeypatch.setattr(job_profile, "chat", fake_chat)
+
+    result = match_direction("简历" * 20, "backend", PROFILE)
+
+    assert len(calls) == 2
+    assert "error" not in result
+    assert result.get("partial") is not True
+    assert len(result["table"]) == 5
+
+
+def test_partial_when_both_attempts_incomplete(monkeypatch):
+    def fake_chat(messages, **kwargs):
+        return json.dumps(_table_with_rows(3), ensure_ascii=False)
+
+    monkeypatch.setattr(job_profile, "chat", fake_chat)
+
+    result = match_direction("简历" * 20, "backend", PROFILE)
+
+    assert "error" not in result
+    assert result["partial"] is True
+    assert len(result["missing"]) == 2
+    assert len(result["table"]) == 5
+
+def test_duplicate_index_does_not_count_as_complete(monkeypatch):
+    duplicated = {
+        "summary": "重复 index",
+        "table": [
+            {"index": 1, "item": "A", "level": "have", "evidence": "e", "note": "n"},
+            {"index": 1, "item": "A", "level": "have", "evidence": "e", "note": "n"},
+            {"index": 2, "item": "B", "level": "have", "evidence": "e", "note": "n"},
+            {"index": 2, "item": "B", "level": "have", "evidence": "e", "note": "n"},
+            {"index": 3, "item": "C", "level": "have", "evidence": "e", "note": "n"},
+        ],
+        "priorities": [],
+    }
+    responses = [
+        json.dumps(duplicated, ensure_ascii=False),
+        json.dumps(_table_with_rows(5), ensure_ascii=False),
+    ]
+    calls = []
+
+    def fake_chat(messages, **kwargs):
+        calls.append(messages)
+        return responses[len(calls) - 1]
+
+    monkeypatch.setattr(job_profile, "chat", fake_chat)
+
+    result = match_direction("简历" * 20, "backend", PROFILE)
+
+    assert len(calls) == 2
+    assert "error" not in result
+    assert result.get("partial") is not True
+    assert len(result["table"]) == 5
