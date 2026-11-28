@@ -135,8 +135,8 @@ def render_direction(result, profile):
     if missing_rows:
         with st.expander("为什么有些是未体现？"):
             debug = result.get("_debug") or {}
-            st.write("模型返回的 table 原文（截断 800 字）：")
-            st.text(debug.get("raw_table", ""))
+            st.write("模型返回的原始 JSON（截断 800 字）：")
+            st.text(debug.get("raw", ""))
             st.write(f"命中的序号：{debug.get('matched_indexes', [])}")
 
     priorities = result.get("priorities") or []
@@ -286,7 +286,13 @@ direction_result = st.session_state.get("direction_result")
 if active_view == "direction" and direction_result:
     st.divider()
     if "error" in direction_result:
+        # 模型出错和简历没写要彻底分开：这里只报错，绝不渲染“未体现”表格
         st.error(direction_result["error"])
+        error_debug = direction_result.get("debug") or {}
+        if error_debug:
+            with st.expander("查看模型原始返回（调试）"):
+                st.write(f"问题：{error_debug.get('problems', [])}")
+                st.text(error_debug.get("raw", ""))
     else:
         direction_profile = profiles.get(st.session_state.get("direction_key", ""))
         if direction_profile:

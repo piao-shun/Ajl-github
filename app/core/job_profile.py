@@ -61,6 +61,35 @@ def load_profiles(path=None):
     return normalized
 
 
+def _validate_direction_data(data):
+    # 返回问题列表；空列表表示结构合格
+    problems = []
+
+    table = data.get("table")
+    if not isinstance(table, list):
+        problems.append("table 字段缺失或不是数组（期望与行业标准条目数一致的数组）")
+        return problems
+    if len(table) == 0:
+        problems.append("table 字段为空（期望与行业标准条目数一致的数组）")
+        return problems
+
+    dict_rows = [row for row in table if isinstance(row, dict)]
+    if len(dict_rows) != len(table):
+        problems.append(f"table 里有 {len(table) - len(dict_rows)} 行不是对象")
+
+    if not dict_rows:
+        problems.append("table 里没有任何有效行")
+        return problems
+
+    has_identifier = any(
+        row.get("index") is not None or _row_item(row) for row in dict_rows
+    )
+    if not has_identifier:
+        problems.append("table 里没有任何一行带 index 或 item/要求/name，无法识别条目")
+
+    return problems
+
+
 def normalize_direction_result(data, direction, profile):
     rows = [row for row in (data.get("table") or []) if isinstance(row, dict)]
 
@@ -131,9 +160,9 @@ def normalize_direction_result(data, direction, profile):
                 }
             )
 
-    # 调试信息：页面在出现“未返回”时会展开显示这些内容
+    # 调试信息：保留整段模型返回，页面展开时才能看到到底返回了什么
     debug = {
-        "raw_table": json.dumps(rows, ensure_ascii=False)[:800],
+        "raw": json.dumps(data, ensure_ascii=False)[:800],
         "matched_indexes": matched_indexes,
     }
 
@@ -152,10 +181,12 @@ def match_direction(resume_text, direction, profile, background=""):
     if len(bg_text) > config.DIRECTION_BG_MAX_CHARS:
         bg_text = bg_text[: config.DIRECTION_BG_MAX_CHARS]
 
+    total = len(profile.get("core", []))
     messages = [
         {"role": "system", "content": DIRECTION_SYSTEM_PROMPT},
         {"role": "user", "content": build_direction_prompt(resume_text, profile, bg_text)},
     ]
+
     try:
         content = chat(messages, json_mode=True)
     except Exception as exc:
@@ -163,7 +194,42 @@ def match_direction(resume_text, direction, profile, background=""):
 
     data = _safe_json(content)
     if not isinstance(data, dict):
-        return {"error": "模型返回的内容不是有效 JSON，请重试一次。"}
+        problems = ["模型返回的不是 JSON 对象"]
+    else:
+        problems = _validate_direction_data(data)
+
+    if problems:
+        # 第 2 次调用：把具体问题和 schema 一起告诉模型
+        retry_messages = messages + [
+            {
+                "role": "user",
+                "content": (
+                    f"你上一次的返回不合格：{'；'.join(problems)}。"
+                    "请严格按 JSON schema 重新输出。"
+                    f"table 必须是长度为 {total} 的数组，每行必须含 index（1..{total}）、"
+                    "item、level、evidence、note。"
+                    "只输出 JSON，不要任何解释。"
+                ),
+            }
+        ]
+        try:
+            content = chat(retry_messages, json_mode=True)
+        except Exception as exc:
+            return {"error": f"调用模型失败：{exc}"}
+
+        data = _safe_json(content)
+        if not isinstance(data, dict):
+            problems = ["模型第二次返回的不是 JSON 对象"]
+        else:
+            problems = _validate_direction_data(data)
+
+        if problems:
+            # 失败态只返回 error，绝不带 table，避免上层误渲染成“全部未体现”
+            return {
+                "error": "模型返回格式异常（缺少能力表格），请再点一次重试",
+                "debug": {"raw": (content or "")[:800], "problems": problems},
+            }
+
     return normalize_direction_result(data, direction, profile)
 
 

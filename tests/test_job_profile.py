@@ -2,10 +2,11 @@ import json
 
 import pytest
 
-from app.core import prompts
+from app.core import job_profile, prompts
 from app.core.job_profile import (
     _normalize_text,
     load_profiles,
+    match_direction,
     normalize_direction_result,
     search_url,
 )
@@ -176,3 +177,74 @@ def test_index_alignment_wins_even_if_text_differs():
 def test_normalization_keeps_plus_and_hash():
     assert _normalize_text("C++") != _normalize_text("C")
     assert _normalize_text("C#") != _normalize_text("C")
+
+PROFILE = {
+    "direction": "backend",
+    "name": "后端开发工程师",
+    "core": [
+        {"item": "A"},
+        {"item": "B"},
+        {"item": "C"},
+        {"item": "D"},
+        {"item": "E"},
+    ],
+}
+
+
+def _full_table():
+    return {
+        "summary": "正常",
+        "table": [
+            {"index": i, "item": name, "level": "have", "evidence": "e", "note": "n"}
+            for i, name in enumerate(["A", "B", "C", "D", "E"], 1)
+        ],
+        "priorities": [],
+    }
+
+
+def test_retry_once_then_success(monkeypatch):
+    responses = [
+        json.dumps({"summary": "缺表格"}, ensure_ascii=False),
+        json.dumps(_full_table(), ensure_ascii=False),
+    ]
+    calls = []
+
+    def fake_chat(messages, **kwargs):
+        calls.append(messages)
+        return responses[len(calls) - 1]
+
+    monkeypatch.setattr(job_profile, "chat", fake_chat)
+
+    result = match_direction("简历" * 20, "backend", PROFILE)
+
+    assert len(calls) == 2
+    assert "error" not in result
+    assert len(result["table"]) == 5
+
+
+def test_retry_twice_invalid_returns_error_without_table(monkeypatch):
+    def fake_chat(messages, **kwargs):
+        return json.dumps({"summary": "一直缺表格"}, ensure_ascii=False)
+
+    monkeypatch.setattr(job_profile, "chat", fake_chat)
+
+    result = match_direction("简历" * 20, "backend", PROFILE)
+
+    assert "error" in result
+    assert "table" not in result
+    assert result["debug"]["problems"]
+
+
+def test_valid_first_time_no_retry(monkeypatch):
+    calls = []
+
+    def fake_chat(messages, **kwargs):
+        calls.append(messages)
+        return json.dumps(_full_table(), ensure_ascii=False)
+
+    monkeypatch.setattr(job_profile, "chat", fake_chat)
+
+    result = match_direction("简历" * 20, "backend", PROFILE)
+
+    assert len(calls) == 1
+    assert len(result["table"]) == 5
