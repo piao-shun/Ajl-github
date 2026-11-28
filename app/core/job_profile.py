@@ -1,4 +1,6 @@
 import json
+import re
+import unicodedata
 from pathlib import Path
 from urllib.parse import quote
 
@@ -10,6 +12,22 @@ PROFILES_PATH = config.DATA_DIR / "job_profiles.json"
 
 REQUIRED_FIELDS = ("name", "aliases", "core", "bonus", "search_keywords")
 VALID_LEVELS = ("have", "partial", "missing", "unknown")
+ITEM_KEYS = ("item", "要求", "name")
+
+
+def _normalize_text(text):
+    # 全角转半角、去掉空白和标点、统一小写，用于模糊对齐
+    text = unicodedata.normalize("NFKC", str(text or ""))
+    text = re.sub(r"[\s\W_]+", "", text)
+    return text.lower()
+
+
+def _row_item(row):
+    # 模型可能用 item / 要求 / name 三种 key，依次取第一个非空值
+    for key in ITEM_KEYS:
+        if row.get(key):
+            return str(row[key])
+    return ""
 
 
 def load_profiles(path=None):
@@ -43,18 +61,34 @@ def load_profiles(path=None):
 
 
 def normalize_direction_result(data, direction, profile):
-    # 按 profile.core 重建表格，保证顺序一致且一条不漏
-    model_rows = {}
-    for row in data.get("table") or []:
-        if isinstance(row, dict) and row.get("item"):
-            model_rows[row["item"]] = row
+    rows = [row for row in (data.get("table") or []) if isinstance(row, dict)]
+
+    # 对齐方式一：按模型返回的 index 对齐，最稳
+    by_index = {}
+    for row in rows:
+        try:
+            index = int(row.get("index"))
+        except (TypeError, ValueError):
+            continue
+        by_index[index] = row
+
+    # 对齐方式二：按归一化后的 item 文本对齐，兼容 key 别名和空格差异
+    by_text = {}
+    for row in rows:
+        key = _normalize_text(_row_item(row))
+        if key:
+            by_text[key] = row
 
     table = []
-    for core_entry in profile.get("core", []):
+    matched_indexes = []
+    for position, core_entry in enumerate(profile.get("core", []), 1):
         name = core_entry.get("item", "")
-        row = model_rows.get(name)
+        row = by_index.get(position)
         if row is None:
-            # 模型漏返回这一项：用专门的 note 标出，和"简历真的没提"区分开
+            row = by_text.get(_normalize_text(name))
+
+        if row is None:
+            # index 和归一化文本都对不上，才判定模型未返回
             table.append(
                 {
                     "item": name,
@@ -65,11 +99,13 @@ def normalize_direction_result(data, direction, profile):
             )
             continue
 
+        matched_indexes.append(position)
         level = row.get("level")
         if level not in VALID_LEVELS:
             level = "unknown"
         table.append(
             {
+                # 展示一律用 profile 自己的文字，不用模型可能写歪的 item
                 "item": name,
                 "level": level,
                 "evidence": row.get("evidence", "") or "",
@@ -77,24 +113,34 @@ def normalize_direction_result(data, direction, profile):
             }
         )
 
-    # priorities 只保留能在表格里找到同名条目的项
-    table_items = {row["item"] for row in table}
+    # priorities 用归一化匹配回表格里的标准条目，避免 key 或空格差异导致丢失
+    table_by_text = {_normalize_text(row["item"]): row["item"] for row in table}
     priorities = []
     for entry in data.get("priorities") or []:
-        if isinstance(entry, dict) and entry.get("item") in table_items:
+        if not isinstance(entry, dict):
+            continue
+        canonical = table_by_text.get(_normalize_text(_row_item(entry)))
+        if canonical:
             priorities.append(
                 {
-                    "item": entry["item"],
+                    "item": canonical,
                     "reason": entry.get("reason", "") or "",
                     "how": entry.get("how", "") or "",
                 }
             )
+
+    # 调试信息：页面在出现“未返回”时会展开显示这些内容
+    debug = {
+        "raw_table": json.dumps(rows, ensure_ascii=False)[:800],
+        "matched_indexes": matched_indexes,
+    }
 
     return {
         "direction": direction,
         "summary": (data.get("summary") or "")[:200],
         "table": table,
         "priorities": priorities,
+        "_debug": debug,
     }
 
 

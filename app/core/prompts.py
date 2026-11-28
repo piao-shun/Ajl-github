@@ -77,6 +77,7 @@ DIRECTION_SYSTEM_PROMPT = (
 def build_direction_prompt(raw_text, profile, background=""):
     direction = profile.get("direction", "")
     name = profile.get("name", "")
+    total = len(profile.get("core", []))
     bg_text = (background or "").strip()
     # 背景为空时整段不出现，prompt 里不会残留一个空的“背景：”
     bg_section = f"\n候选人背景：\n{bg_text}\n" if bg_text else ""
@@ -89,12 +90,14 @@ def build_direction_prompt(raw_text, profile, background=""):
   "direction": "{direction}",
   "summary": "一段话总评，不超过 120 字",
   "table": [
-    {{"item": "条目名", "level": "have|partial|missing|unknown", "evidence": "简历原文逐字片段，没有就空字符串", "note": "一句话说明判断依据"}}
+    {{"index": 1, "item": "条目名", "level": "have|partial|missing|unknown", "evidence": "简历原文逐字片段，没有就空字符串", "note": "一句话说明判断依据"}}
   ],
   "priorities": [
     {{"item": "条目名", "reason": "为什么最该补", "how": "具体怎么补，一条可执行路径"}}
   ]
 }}
+
+item 必须逐字复制下列要求，包括其中的空格；同时返回 index（1 到 {total}，对应下面列表的序号）。
 
 行业标准（core，请按顺序逐条判断，table 必须覆盖全部）：
 {core_lines}

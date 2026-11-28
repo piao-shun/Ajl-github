@@ -129,6 +129,16 @@ def render_direction(result, profile):
     st.table(rows)
     st.caption("以上为行业通用要求，具体岗位以 JD 为准")
 
+    missing_rows = [
+        row for row in result.get("table", []) if "模型未返回" in row.get("note", "")
+    ]
+    if missing_rows:
+        with st.expander("为什么有些是未体现？"):
+            debug = result.get("_debug") or {}
+            st.write("模型返回的 table 原文（截断 800 字）：")
+            st.text(debug.get("raw_table", ""))
+            st.write(f"命中的序号：{debug.get('matched_indexes', [])}")
+
     priorities = result.get("priorities") or []
     if priorities:
         st.subheader("优先补什么")

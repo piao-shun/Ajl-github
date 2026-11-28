@@ -116,3 +116,54 @@ def test_missing_table_rows_are_labeled_as_model_omission():
         assert row["level"] == "unknown"
         assert row["evidence"] == ""
         assert "模型未返回" in row["note"]
+
+def test_item_with_space_difference_still_matches():
+    profile = {"core": [{"item": "HTTP 与 REST 接口"}, {"item": "数据库与 SQL"}]}
+    data = {
+        "summary": "测试",
+        "table": [
+            {"index": 1, "item": "HTTP与REST接口", "level": "have", "evidence": "e", "note": "n"},
+        ],
+        "priorities": [],
+    }
+
+    result = normalize_direction_result(data, "backend", profile)
+
+    assert result["table"][0]["item"] == "HTTP 与 REST 接口"
+    assert result["table"][0]["level"] == "have"
+    assert "模型未返回" not in result["table"][0]["note"]
+
+
+def test_alternate_requirement_key_still_matches():
+    profile = {"core": [{"item": "数据库与 SQL"}]}
+    data = {
+        "summary": "测试",
+        "table": [
+            {"index": 1, "要求": "数据库与SQL", "level": "partial", "evidence": "e", "note": "n"}
+        ],
+        "priorities": [],
+    }
+
+    result = normalize_direction_result(data, "backend", profile)
+
+    assert result["table"][0]["level"] == "partial"
+    assert "模型未返回" not in result["table"][0]["note"]
+
+
+def test_index_alignment_wins_even_if_text_differs():
+    profile = {"core": [{"item": "A"}, {"item": "B"}, {"item": "C"}]}
+    data = {
+        "summary": "测试",
+        "table": [
+            {"index": 1, "item": "完全不同的描述", "level": "missing", "evidence": "", "note": "n"},
+            {"index": 3, "item": "写歪的第三项", "level": "have", "evidence": "e", "note": "n"},
+        ],
+        "priorities": [],
+    }
+
+    result = normalize_direction_result(data, "backend", profile)
+
+    assert result["table"][0]["level"] == "missing"
+    assert result["table"][1]["level"] == "unknown"
+    assert "模型未返回" in result["table"][1]["note"]
+    assert result["table"][2]["level"] == "have"
