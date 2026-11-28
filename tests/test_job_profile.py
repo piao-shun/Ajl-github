@@ -94,3 +94,25 @@ def test_search_url_encodes_chinese():
     assert url.startswith("https://www.zhipin.com/web/geek/job?query=")
     assert "%" in url
     assert " " not in url
+
+def test_missing_table_rows_are_labeled_as_model_omission():
+    profile = {"core": [{"item": name} for name in ["A", "B", "C", "D", "E"]]}
+    data = {
+        "summary": "测试",
+        "table": [
+            {"item": "A", "level": "have", "evidence": "a", "note": "n"},
+            {"item": "B", "level": "partial", "evidence": "b", "note": "n"},
+            {"item": "C", "level": "missing", "evidence": "", "note": "n"},
+        ],
+        "priorities": [],
+    }
+
+    result = normalize_direction_result(data, "backend", profile)
+
+    assert len(result["table"]) == 5
+    missing_rows = result["table"][3:]
+    assert [row["item"] for row in missing_rows] == ["D", "E"]
+    for row in missing_rows:
+        assert row["level"] == "unknown"
+        assert row["evidence"] == ""
+        assert "模型未返回" in row["note"]

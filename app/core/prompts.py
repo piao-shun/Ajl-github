@@ -61,6 +61,7 @@ def build_analysis_prompt(raw_text, target_job="", background="", jd=""):
 \"\"\"
 """
 
+
 DIRECTION_SYSTEM_PROMPT = (
     "你是一名资深招聘官，负责按行业通用标准给学生做职业方向诊断。"
     "你只能使用简历原文中出现过的事实，不得编造公司、数字、技术栈或经历。"
@@ -73,9 +74,12 @@ DIRECTION_SYSTEM_PROMPT = (
 )
 
 
-def build_direction_prompt(raw_text, profile):
+def build_direction_prompt(raw_text, profile, background=""):
     direction = profile.get("direction", "")
     name = profile.get("name", "")
+    bg_text = (background or "").strip()
+    # 背景为空时整段不出现，prompt 里不会残留一个空的“背景：”
+    bg_section = f"\n候选人背景：\n{bg_text}\n" if bg_text else ""
     core_lines = "\n".join(
         f"{index + 1}. {entry.get('item', '')}（期望：{entry.get('expect', '')}）"
         for index, entry in enumerate(profile.get("core", []))
@@ -94,7 +98,7 @@ def build_direction_prompt(raw_text, profile):
 
 行业标准（core，请按顺序逐条判断，table 必须覆盖全部）：
 {core_lines}
-
+{bg_section}
 简历原文：
 \"\"\"
 {raw_text}

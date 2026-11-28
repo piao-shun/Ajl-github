@@ -52,7 +52,19 @@ def normalize_direction_result(data, direction, profile):
     table = []
     for core_entry in profile.get("core", []):
         name = core_entry.get("item", "")
-        row = model_rows.get(name, {})
+        row = model_rows.get(name)
+        if row is None:
+            # 模型漏返回这一项：用专门的 note 标出，和"简历真的没提"区分开
+            table.append(
+                {
+                    "item": name,
+                    "level": "unknown",
+                    "evidence": "",
+                    "note": "（模型未返回此项，结果可能不完整）",
+                }
+            )
+            continue
+
         level = row.get("level")
         if level not in VALID_LEVELS:
             level = "unknown"
@@ -86,10 +98,15 @@ def normalize_direction_result(data, direction, profile):
     }
 
 
-def match_direction(resume_text, direction, profile):
+def match_direction(resume_text, direction, profile, background=""):
+    # 背景只截断不报错；空背景交给 prompt 层决定是否出现
+    bg_text = (background or "").strip()
+    if len(bg_text) > config.DIRECTION_BG_MAX_CHARS:
+        bg_text = bg_text[: config.DIRECTION_BG_MAX_CHARS]
+
     messages = [
         {"role": "system", "content": DIRECTION_SYSTEM_PROMPT},
-        {"role": "user", "content": build_direction_prompt(resume_text, profile)},
+        {"role": "user", "content": build_direction_prompt(resume_text, profile, bg_text)},
     ]
     try:
         content = chat(messages, json_mode=True)
@@ -104,4 +121,5 @@ def match_direction(resume_text, direction, profile):
 
 def search_url(keyword):
     # 关键词做 URL 编码，中文不会让链接失效
+    # 故意不加城市参数：定位交给 BOSS 平台按用户当前城市自动决定
     return f"https://www.zhipin.com/web/geek/job?query={quote(keyword)}"

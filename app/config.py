@@ -31,6 +31,9 @@ MIN_TEXT_CHARS = 50
 # 岗位 JD 最多比对前 3000 字
 JD_MAX_CHARS = 3000
 
+# 方向诊断时，用户背景最多传 200 字
+DIRECTION_BG_MAX_CHARS = 200
+
 
 def prepare_jd(jd_text, max_chars=JD_MAX_CHARS):
     # 去掉首尾空白；超长则截断，并告诉调用方是否发生过截断

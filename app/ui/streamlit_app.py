@@ -126,7 +126,7 @@ def render_direction(result, profile):
                 "说明": row.get("note", ""),
             }
         )
-    st.dataframe(rows, use_container_width=True)
+    st.table(rows)
     st.caption("以上为行业通用要求，具体岗位以 JD 为准")
 
     priorities = result.get("priorities") or []
@@ -226,7 +226,7 @@ with right:
     tab_direction, tab_jd = st.tabs(["方向诊断", "JD 精筛"])
 
     with tab_direction:
-        if st.button("诊断这个方向", type="primary"):
+        if st.button("诊断这个方向", type="primary", disabled=(not selected_direction)):
             if not selected_direction:
                 st.warning("先在上方选择一个方向")
             elif not config.API_KEY:
@@ -238,9 +238,14 @@ with right:
                     st.warning("简历较长，仅分析前 15000 字")
                 with st.spinner("AI 正在诊断方向..."):
                     st.session_state["direction_result"] = match_direction(
-                        direction_text, selected_direction, profiles[selected_direction]
+                        direction_text,
+                        selected_direction,
+                        profiles[selected_direction],
+                        background,
                     )
                     st.session_state["direction_key"] = selected_direction
+                    # 两块结果互斥：只显示最近一次操作的那一块
+                    st.session_state["active_view"] = "direction"
 
     with tab_jd:
         if st.button("生成修改意见", type="primary"):
@@ -262,9 +267,13 @@ with right:
                     )
                     st.session_state["source_name"] = parsed["filename"]
                     st.session_state["jd_used"] = bool(jd_text)
+                    # 两块结果互斥：只显示最近一次操作的那一块
+                    st.session_state["active_view"] = "jd"
+
+active_view = st.session_state.get("active_view")
 
 direction_result = st.session_state.get("direction_result")
-if direction_result:
+if active_view == "direction" and direction_result:
     st.divider()
     if "error" in direction_result:
         st.error(direction_result["error"])
@@ -274,7 +283,7 @@ if direction_result:
             render_direction(direction_result, direction_profile)
 
 analysis = st.session_state.get("analysis")
-if analysis:
+if active_view == "jd" and analysis:
     st.divider()
     if st.session_state.get("jd_used"):
         st.caption("本次分析基于岗位 JD")
