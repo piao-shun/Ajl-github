@@ -81,23 +81,38 @@ def _validate_direction_data(data, total=None):
         problems.append("table 里没有任何有效行")
         return problems
 
-    identifiable_rows = [
-        row for row in dict_rows if row.get("index") is not None or _row_item(row)
-    ]
-    if not identifiable_rows:
+    identifiable_count = _count_identifiable(data)
+    if identifiable_count == 0:
         problems.append("table 里没有任何一行带 index 或 item/要求/name，无法识别条目")
-    elif total is not None and len(identifiable_rows) < total:
-        # 行数不足也交给重试逻辑处理
-        problems.append(f"只返回了 {len(identifiable_rows)} 行，期望 {total} 行")
+    elif total is not None and identifiable_count < total:
+        # 唯一项数不足也交给重试逻辑处理（重复 index 只算一项）
+        problems.append(f"只返回了 {identifiable_count} 项，期望 {total} 项")
 
     return problems
+
+
+def _row_key(row):
+    # 每行只取一个标识：优先 index，没有 index 再用归一化文本
+    index = row.get("index")
+    if index is not None:
+        try:
+            return ("index", int(index))
+        except (TypeError, ValueError):
+            pass
+    text = _normalize_text(_row_item(row))
+    if text:
+        return ("text", text)
+    return None
 
 
 def _count_identifiable(data):
     if not isinstance(data, dict):
         return 0
     rows = [row for row in (data.get("table") or []) if isinstance(row, dict)]
-    return sum(1 for row in rows if row.get("index") is not None or _row_item(row))
+    # 用集合去重：5 行但只有 3 个唯一 index，只算 3 项
+    keys = {_row_key(row) for row in rows}
+    keys.discard(None)
+    return len(keys)
 
 
 def normalize_direction_result(
